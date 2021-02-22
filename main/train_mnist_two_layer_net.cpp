@@ -87,13 +87,13 @@ int main()
     plt::title("Loss History");
     plt::plot(plot_counter, loss_history, "b");
     plt::grid(true);
-    plt::save("ch4/mnist_learning_curve.png");
+    plt::save("mnist_learning_curve.png");
 
     plt::cla();
     plt::title("Accuracy History");
     plt::plot(accuracy_counter, accuracy_history, "r");
     plt::grid(true);
-    plt::save("ch4/mnist_accuracy_plot.png");
+    plt::save("mnist_accuracy_plot.png");
 
     return 0;
 }
