@@ -96,69 +96,32 @@ namespace MyDL{
     // ------------------------------------------------------
 
     // コンストラクタ
-    MnistEigenDataset::MnistEigenDataset(int batch_size)
+    MnistEigenDataset::MnistEigenDataset(int batch_size, bool random_load)
     {
         _batch_size = batch_size;
         _train_max_batch_num = (60000 + _batch_size - 1) / _batch_size; // 切り上げ
         _test_max_batch_num = (10000 + _batch_size - 1) / _batch_size;
+
+        // ファイル読み込み初期化処理
+        _init_train_loader();
+        _init_test_loader();
+        
+        // ランダム読み出しの設定をしているときはインデックスをシャッフル
+        if (random_load)
+        {
+            std::mt19937_64 get_rand_mt;
+            std::shuffle(_train_indices.begin(), _train_indices.end(), get_rand_mt);
+            std::shuffle(_test_indices.begin(), _test_indices.end(), get_rand_mt);
+        }
     }
 
     //【指定されたバッチサイズ分の訓練データをMatrixとして返す関数】
     // MatrixXd& train_X  -> 出力：訓練画像データ(batch_size×(28*28))
     // MatrixXd& train_y  -> 出力：訓練ラベルデータ(batch_size×1 or 10)
     // bool one_hot_label -> 入力：ラベルデータをonehot化するか否かのフラグ(デフォルト：False)
-    // bool random_load   -> 入力：読み出し順をランダムにするか否かのフラグ(デフォルト：True)
-    void MnistEigenDataset::next_train(MatrixXd& train_X, MatrixXd& train_y, bool one_hot_label, bool random_load){
-
-        // どちらかがファイルオープンしていない場合に実行(初期化)
-        if (!_train_image_ifs.is_open() || !_train_label_ifs.is_open())
-        {
-            // 初期化処理：内部メソッドとして切り出し？
-            _train_image_ifs.open(_train_image_filepath, std::ios::in | std::ios::binary);
-            _train_label_ifs.open(_train_label_filepath, std::ios::in | std::ios::binary);
-            int magic_number = 0;
-            int number_of_images = 0;
-            int rows = 0;
-            int cols = 0;
-
-            // 適切な位置までファイルポインタ移動
-            _train_image_ifs.read((char *)&magic_number, sizeof(magic_number)); // sizeof(magic_number) = 4, つまり4byte分読み出し
-            magic_number = LittleEndian2BigEndian(magic_number);
-            _train_image_ifs.read((char *)&number_of_images, sizeof(number_of_images));
-            number_of_images = LittleEndian2BigEndian(number_of_images);
-            _train_image_ifs.read((char *)&rows, sizeof(rows));
-            rows = LittleEndian2BigEndian(rows);
-            _train_image_ifs.read((char *)&cols, sizeof(cols));
-            cols = LittleEndian2BigEndian(cols);
-
-            cout << "IMAGE magic number: " << magic_number << endl;
-
-            // 適切な位置までファイルポインタ移動
-            _train_label_ifs.read((char *)&magic_number, sizeof(magic_number));
-            magic_number = LittleEndian2BigEndian(magic_number);
-            _train_label_ifs.read((char *)&number_of_images, sizeof(number_of_images));
-            number_of_images = LittleEndian2BigEndian(number_of_images);
-
-            cout << "LABEL magic number: " << magic_number << endl;
-
-            // ファイルポインタ：シーク位置の記憶
-            _train_image_pos = _train_image_ifs.tellg();
-            _train_label_pos = _train_label_ifs.tellg();
-
-            // 読み出しのためのインデックス作成：単なる整数型でOK(int)
-            for (int i = 0; i < number_of_images; i++)
-            {
-                _train_indices.push_back(i);
-            }
-
-            // random_load = trueのときはインデックスをシャッフル
-            if (random_load)
-            {
-                std::mt19937_64 get_rand_mt;
-                std::shuffle(_train_indices.begin(), _train_indices.end(), get_rand_mt);
-            }
-        }
-
+    // bool normalize     -> 入力：データを正規化するか否かのフラグ(デフォルト：True)
+    void MnistEigenDataset::next_train(MatrixXd& train_X, MatrixXd& train_y, bool one_hot_label, bool normalize)
+    {
         // 読み出し用一時変数
         vector<double> tmp_image(28*28); // 配列のサイズ初期化が必要(でないとセグフォ)
         vector<double> tmp_labels(_batch_size);
@@ -212,6 +175,11 @@ namespace MyDL{
 
         }
 
+        if (normalize)
+        {
+            train_X /= 255;
+        }
+
         _train_load_count++;
 
         // カウンタリセット
@@ -225,56 +193,9 @@ namespace MyDL{
     // MatrixXd& test_X  -> 出力：テスト画像データ(batch_size×(28*28))
     // MatrixXd& test_y  -> 出力：テストラベルデータ(batch_size×1 or 10)
     // bool one_hot_label -> 入力：ラベルデータをonehot化するか否かのフラグ(デフォルト：False)
-    // bool random_load   -> 入力：読み出し順をランダムにするか否かのフラグ(デフォルト：True)
-    void MnistEigenDataset::next_test(MatrixXd& test_X, MatrixXd& test_y, bool one_hot_label, bool random_load){
-        
-
-        if (!_test_image_ifs.is_open() || !_test_label_ifs.is_open())
-        {
-            _test_image_ifs.open(_test_image_filepath, std::ios::in | std::ios::binary);
-            _test_label_ifs.open(_test_label_filepath, std::ios::in | std::ios::binary);
-            int magic_number = 0;
-            int number_of_images = 0;
-            int rows = 0;
-            int cols = 0;
-
-            // 適切な位置までディスクリプタ移動
-            _test_image_ifs.read((char *)&magic_number, sizeof(magic_number)); // sizeof(magic_number) = 4, つまり4byte分読み出し
-            magic_number = LittleEndian2BigEndian(magic_number);
-            _test_image_ifs.read((char *)&number_of_images, sizeof(number_of_images));
-            number_of_images = LittleEndian2BigEndian(number_of_images);
-            _test_image_ifs.read((char *)&rows, sizeof(rows));
-            rows = LittleEndian2BigEndian(rows);
-            _test_image_ifs.read((char *)&cols, sizeof(cols));
-            cols = LittleEndian2BigEndian(cols);
-
-            cout << "IMAGE magic number: " << magic_number << endl;
-            
-            // 適切な位置までディスクリプタ移動
-            _test_label_ifs.read((char *)&magic_number, sizeof(magic_number));
-            magic_number = LittleEndian2BigEndian(magic_number);
-            _test_label_ifs.read((char *)&number_of_images, sizeof(number_of_images));
-            number_of_images = LittleEndian2BigEndian(number_of_images);
-
-            cout << "LABEL magic number: " << magic_number << endl;
-            
-            // ファイルポインタ：シーク位置の記憶
-            _test_image_pos = _test_image_ifs.tellg();
-            _test_label_pos = _test_label_ifs.tellg();
-
-            // 読み出しのためのインデックス作成：単なる整数型でOK(int)
-            for (int i = 0; i < number_of_images; i++)
-            {
-                _test_indices.push_back(i);
-            }
-
-            // random_load = trueのときはインデックスをシャッフル
-            if (random_load)
-            {
-                std::mt19937_64 get_rand_mt;
-                std::shuffle(_test_indices.begin(), _test_indices.end(), get_rand_mt);
-            }
-        }
+    // bool normalize     -> 入力：データを正規化するか否かのフラグ(デフォルト：True)
+    void MnistEigenDataset::next_test(MatrixXd& test_X, MatrixXd& test_y, bool one_hot_label, bool normalize)
+    {
 
         // 読み出し用一時変数
         vector<double> tmp_image(28 * 28); // 配列のサイズ初期化が必要(でないとセグフォ)
@@ -301,11 +222,11 @@ namespace MyDL{
             }
             // ファイルシーク：画像データのインターバルは「28×28=784byte」あるので注意
             // 画像データ
-            _test_image_ifs.seekg(_test_image_pos);                      // シークを初期位置に
+            _test_image_ifs.seekg(_test_image_pos);                       // シークを初期位置に
             _test_image_ifs.seekg(tmp_idx * 28 * 28, std::ios_base::cur); // 読み出し位置まで移動
             // ラベル
-            _test_label_ifs.seekg(_test_label_pos);            // シークを初期位置に
-            _test_label_ifs.seekg(tmp_idx, std::ios_base::cur); // 読み出し位置まで移動
+            _test_label_ifs.seekg(_test_label_pos);                       // シークを初期位置に
+            _test_label_ifs.seekg(tmp_idx, std::ios_base::cur);           // 読み出し位置まで移動
 
             // 画像読み出し
             for (int j = 0; j < 28 * 28; j++)
@@ -330,6 +251,11 @@ namespace MyDL{
             {
                 test_y.row(i) = Map<Matrix<double, 1, 1>>(&(tmp_labels[i]));
             }
+        }
+
+        if (normalize)
+        {
+            test_X /= 255;
         }
 
         _test_load_count++;
@@ -359,6 +285,99 @@ namespace MyDL{
     void MnistEigenDataset::set_test_label_filepath(string filepath)
     {
         _test_label_filepath = filepath;
+    }
+
+    // パス設定後の初期化処理
+    void MnistEigenDataset::initialize_loader(void)
+    {
+        _init_test_loader();
+        _init_train_loader();
+    }
+
+    // -------------------------------------------------------------
+    //                   内部メソッド
+    // -------------------------------------------------------------
+    void MnistEigenDataset::_init_train_loader(void)
+    {
+        // 設定したファイルパスに基づいてファイルオープン
+        _train_image_ifs.open(_train_image_filepath, std::ios::in | std::ios::binary);
+        _train_label_ifs.open(_train_label_filepath, std::ios::in | std::ios::binary);
+        int magic_number = 0;
+        int number_of_images = 0;
+        int rows = 0;
+        int cols = 0;
+
+        // 適切な位置までファイルポインタ移動
+        _train_image_ifs.read((char *)&magic_number, sizeof(magic_number)); // sizeof(magic_number) = 4, つまり4byte分読み出し
+        magic_number = LittleEndian2BigEndian(magic_number);
+        _train_image_ifs.read((char *)&number_of_images, sizeof(number_of_images));
+        number_of_images = LittleEndian2BigEndian(number_of_images);
+        _train_image_ifs.read((char *)&rows, sizeof(rows));
+        rows = LittleEndian2BigEndian(rows);
+        _train_image_ifs.read((char *)&cols, sizeof(cols));
+        cols = LittleEndian2BigEndian(cols);
+
+        cout << "IMAGE magic number: " << magic_number << endl;
+
+        // 適切な位置までファイルポインタ移動
+        _train_label_ifs.read((char *)&magic_number, sizeof(magic_number));
+        magic_number = LittleEndian2BigEndian(magic_number);
+        _train_label_ifs.read((char *)&number_of_images, sizeof(number_of_images));
+        number_of_images = LittleEndian2BigEndian(number_of_images);
+
+        cout << "LABEL magic number: " << magic_number << endl;
+
+        // ファイルポインタ：シーク位置の記憶
+        _train_image_pos = _train_image_ifs.tellg();
+        _train_label_pos = _train_label_ifs.tellg();
+
+        // 読み出しのためのインデックス作成：単なる整数型でOK(int)
+        for (int i = 0; i < number_of_images; i++)
+        {
+            _train_indices.push_back(i);
+        }
+    }
+
+
+    void MnistEigenDataset::_init_test_loader(void)
+    {
+        // 設定したファイルパスに基づいてファイルオープン
+        _test_image_ifs.open(_test_image_filepath, std::ios::in | std::ios::binary);
+        _test_label_ifs.open(_test_label_filepath, std::ios::in | std::ios::binary);
+        int magic_number = 0;
+        int number_of_images = 0;
+        int rows = 0;
+        int cols = 0;
+
+        // 適切な位置までディスクリプタ移動
+        _test_image_ifs.read((char *)&magic_number, sizeof(magic_number)); // sizeof(magic_number) = 4, つまり4byte分読み出し
+        magic_number = LittleEndian2BigEndian(magic_number);
+        _test_image_ifs.read((char *)&number_of_images, sizeof(number_of_images));
+        number_of_images = LittleEndian2BigEndian(number_of_images);
+        _test_image_ifs.read((char *)&rows, sizeof(rows));
+        rows = LittleEndian2BigEndian(rows);
+        _test_image_ifs.read((char *)&cols, sizeof(cols));
+        cols = LittleEndian2BigEndian(cols);
+
+        cout << "IMAGE magic number: " << magic_number << endl;
+
+        // 適切な位置までディスクリプタ移動
+        _test_label_ifs.read((char *)&magic_number, sizeof(magic_number));
+        magic_number = LittleEndian2BigEndian(magic_number);
+        _test_label_ifs.read((char *)&number_of_images, sizeof(number_of_images));
+        number_of_images = LittleEndian2BigEndian(number_of_images);
+
+        cout << "LABEL magic number: " << magic_number << endl;
+
+        // ファイルポインタ：シーク位置の記憶
+        _test_image_pos = _test_image_ifs.tellg();
+        _test_label_pos = _test_label_ifs.tellg();
+
+        // 読み出しのためのインデックス作成：単なる整数型でOK(int)
+        for (int i = 0; i < number_of_images; i++)
+        {
+            _test_indices.push_back(i);
+        }
     }
 
 }

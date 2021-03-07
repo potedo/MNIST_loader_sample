@@ -59,15 +59,20 @@ namespace MyDL{
             int _train_load_count = 0;
             int _test_load_count = 0;
 
+        private:
+            void _init_train_loader(void); // インデックスのシャッフルは初期化関数の外で行う
+            void _init_test_loader(void);
+
         public:
             MnistEigenDataset(){}; // デフォルトコンストラクタ
-            MnistEigenDataset(const int batch_size);
+            MnistEigenDataset(const int batch_size, bool random_load=true);
             void set_train_image_filepath(string);
             void set_train_label_filepath(string);
             void set_test_image_filepath(string);
             void set_test_label_filepath(string);
-            void next_train(MatrixXd &, MatrixXd &, bool one_hot_label=false, bool random_load=true);
-            void next_test(MatrixXd &, MatrixXd &, bool one_hot_label=false, bool random_load=true);
+            void initialize_loader(void);
+            void next_train(MatrixXd &, MatrixXd &, bool one_hot_label=false, bool normalize=true);
+            void next_test(MatrixXd &, MatrixXd &, bool one_hot_label=false, bool normalize=true);
 
     };
 }
