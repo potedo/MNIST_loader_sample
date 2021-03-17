@@ -30,7 +30,7 @@ MnistEigenDatasetというクラスが作成したローダです。
 2. その上で"main/train_mnist_two_layer_net.cpp"をコンパイル。
 
 ### 動作環境
-Windows10 WSL Ubuntu18.04
+Windows10 WSL Ubuntu18.04  
 コンパイラ g++
 
 
