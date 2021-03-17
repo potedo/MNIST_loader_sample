@@ -35,3 +35,4 @@ Windows10 WSL Ubuntu18.04
 
 
 ### 参考情報
+https://novnote.com/mnist-eigen-loader-design/585/
