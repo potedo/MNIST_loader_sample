@@ -32,7 +32,3 @@ MnistEigenDatasetというクラスが作成したローダです。
 ### 動作環境
 Windows10 WSL Ubuntu18.04  
 コンパイラ g++
-
-
-### 参考情報
-https://novnote.com/mnist-eigen-loader-design/585/
